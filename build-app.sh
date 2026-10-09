@@ -9,6 +9,7 @@ APP_VERSION="$(cat "$ROOT_DIR/VERSION")"
 cd "$ROOT_DIR"
 swift "$ROOT_DIR/Scripts/GenerateIcon.swift" "$RESOURCE_DIR"
 swift build -c release
+rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 cp "$ROOT_DIR/.build/release/Lunchpad" "$APP_DIR/Contents/MacOS/Lunchpad"
@@ -34,6 +35,11 @@ PLIST
 
 if [[ -n "${LUNCHPAD_CODESIGN_IDENTITY:-}" ]]; then
     codesign --force --deep --options runtime --sign "$LUNCHPAD_CODESIGN_IDENTITY" "$APP_DIR"
+else
+    # Seal the complete app bundle even for community builds. The Swift binary
+    # has a linker-generated ad-hoc signature, but the bundle itself must also
+    # be signed after its Info.plist and resources have been copied in.
+    codesign --force --deep --sign - --timestamp=none "$APP_DIR"
 fi
 
 echo "Собрано: $APP_DIR"
