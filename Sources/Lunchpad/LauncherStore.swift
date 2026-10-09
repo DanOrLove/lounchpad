@@ -17,6 +17,41 @@ struct LauncherFolder: Identifiable, Codable, Hashable {
     var appPaths: [String]
 }
 
+enum LauncherColorTheme: String, CaseIterable, Identifiable {
+    case black
+    case white
+    case custom
+    case system
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .black: "Чёрная"
+        case .white: "Белая"
+        case .custom: "Настраиваемая"
+        case .system: "Системная"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .black: .dark
+        case .white: .light
+        case .custom, .system: nil
+        }
+    }
+
+    func tint(customHex: String) -> Color? {
+        switch self {
+        case .black: .white
+        case .white: .black
+        case .custom: Color(nsColor: NSColor(lunchpadHex: customHex) ?? .systemIndigo)
+        case .system: nil
+        }
+    }
+}
+
 @MainActor
 final class LauncherStore: ObservableObject {
     @Published private(set) var apps: [LauncherApp] = []
@@ -34,6 +69,12 @@ final class LauncherStore: ObservableObject {
     }
     @Published var backgroundHex: String = UserDefaults.standard.string(forKey: "windowBackgroundHex") ?? "#20283A" {
         didSet { UserDefaults.standard.set(backgroundHex, forKey: "windowBackgroundHex") }
+    }
+    @Published var colorTheme: LauncherColorTheme = LauncherColorTheme(rawValue: UserDefaults.standard.string(forKey: "launcherColorTheme") ?? "system") ?? .system {
+        didSet { UserDefaults.standard.set(colorTheme.rawValue, forKey: "launcherColorTheme") }
+    }
+    @Published var customButtonHex: String = UserDefaults.standard.string(forKey: "customButtonHex") ?? "#38BDF8" {
+        didSet { UserDefaults.standard.set(customButtonHex, forKey: "customButtonHex") }
     }
     @Published var selectedFolder: UUID?
     @Published var isEditing = false

@@ -4,11 +4,14 @@ import UniformTypeIdentifiers
 
 struct LauncherView: View {
     @EnvironmentObject private var store: LauncherStore
+    @EnvironmentObject private var windowPresentation: WindowPresentationState
     @FocusState private var searchFocused: Bool
     @State private var renameFolderID: UUID?
     @State private var folderName = ""
     @State private var showColorEditor = false
     @State private var colorHexDraft = ""
+    @State private var showButtonColorEditor = false
+    @State private var buttonHexDraft = ""
     @State private var isRecordingShortcut = false
 
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 42)]
@@ -16,9 +19,10 @@ struct LauncherView: View {
 
     var body: some View {
         ZStack {
-            let backgroundOpacity = 1 - min(100, max(0, store.transparency)) / 100
-            Rectangle().fill(.ultraThinMaterial).opacity(backgroundOpacity)
-            Color(nsColor: NSColor(lunchpadHex: store.backgroundHex) ?? .systemIndigo).opacity(backgroundOpacity)
+            WindowBackdrop(
+                opacity: 1 - min(100, max(0, store.transparency)) / 100,
+                tint: NSColor(lunchpadHex: store.backgroundHex) ?? .systemIndigo
+            ).ignoresSafeArea()
             VStack(spacing: 0) {
                 header
                 ScrollView {
@@ -50,7 +54,8 @@ struct LauncherView: View {
         }
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 620)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(store.colorTheme.colorScheme)
+        .tint(store.colorTheme.tint(customHex: store.customButtonHex))
         .animation(.spring(response: 0.48, dampingFraction: 0.8), value: store.selectedFolder)
         .animation(.spring(response: 0.45, dampingFraction: 0.78), value: store.visibleApps.map(\.id))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.visibleFolders.map(\.id))
@@ -62,6 +67,7 @@ struct LauncherView: View {
 
     private var header: some View {
         HStack(spacing: 18) {
+            if windowPresentation.isFullScreen { fullscreenWindowControls }
             if store.selectedFolder != nil {
                 Button { store.closeFolder() } label: { Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold)) }
                     .buttonStyle(.plain).help("Все приложения")
@@ -84,18 +90,27 @@ struct LauncherView: View {
             .padding(.horizontal, 15).padding(.vertical, 10)
             .frame(width: 320)
             .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
+            .overlay(Capsule().stroke(.primary.opacity(0.22), lineWidth: 1))
             Spacer(minLength: 30)
             Menu {
                 Button("Новая папка", systemImage: "folder.badge.plus") { store.createFolder() }
                 Button(store.isEditing ? "Готово" : "Настроить оформление", systemImage: store.isEditing ? "checkmark" : "slider.horizontal.3") { store.isEditing.toggle() }
-                Button("Обновить приложения", systemImage: "arrow.clockwise") { store.reloadApps() }
+                Menu("Цветовое оформление") {
+                    ForEach(LauncherColorTheme.allCases) { theme in
+                        Button {
+                            store.colorTheme = theme
+                        } label: {
+                            if store.colorTheme == theme { Label(theme.title, systemImage: "checkmark") }
+                            else { Text(theme.title) }
+                        }
+                    }
+                }
             } label: {
                 Image(systemName: store.isEditing ? "checkmark" : "slider.horizontal.3")
                     .font(.system(size: 15, weight: .medium))
                     .frame(width: 40, height: 40)
                     .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 1))
+                    .overlay(Circle().stroke(.primary.opacity(0.22), lineWidth: 1))
             }
             .menuStyle(.borderlessButton)
             .help("Настройки и папки")
@@ -106,11 +121,11 @@ struct LauncherView: View {
     private func folderTile(_ folder: LauncherFolder) -> some View {
         VStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.white.opacity(0.075))
-                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12), lineWidth: 1))
+                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.primary.opacity(0.075))
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(.primary.opacity(0.12), lineWidth: 1))
                 let apps = folder.appPaths.prefix(9).compactMap { path in store.apps.first(where: { $0.path == path }) }
                 if apps.isEmpty {
-                    Image(systemName: "folder.fill").font(.system(size: 54, weight: .light)).foregroundStyle(.white.opacity(0.72))
+                    Image(systemName: "folder.fill").font(.system(size: 54, weight: .light)).foregroundStyle(.primary.opacity(0.72))
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.fixed(25), spacing: 6), count: 3), spacing: 6) {
                         ForEach(apps) { app in Image(nsImage: app.icon).resizable().interpolation(.high).frame(width: 25, height: 25).clipShape(RoundedRectangle(cornerRadius: 6)) }
@@ -179,6 +194,16 @@ struct LauncherView: View {
                 .buttonStyle(.bordered).disabled(store.transparency != 0)
                 .popover(isPresented: $showColorEditor, arrowEdge: .top) { colorEditor.padding(18).frame(width: 280) }
                 .help(store.transparency == 0 ? "Выбрать цвет фона" : "Установите прозрачность 0%, чтобы выбрать цвет")
+            if store.colorTheme == .custom {
+                Button {
+                    buttonHexDraft = store.customButtonHex
+                    showButtonColorEditor = true
+                } label: { Label("Цвет кнопок", systemImage: "circle.lefthalf.filled") }
+                    .buttonStyle(.bordered)
+                    .popover(isPresented: $showButtonColorEditor, arrowEdge: .top) {
+                        buttonColorEditor.padding(18).frame(width: 260)
+                    }
+            }
             Divider().frame(height: 22)
             hotKeyControl
             Toggle("Автозапуск", isOn: Binding(get: { store.startupEnabled }, set: { store.setLaunchAtLogin($0) }))
@@ -186,7 +211,7 @@ struct LauncherView: View {
         }
         .padding(.horizontal, 24).padding(.vertical, 14)
         .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 1))
+        .overlay(Capsule().stroke(.primary.opacity(0.16), lineWidth: 1))
         .padding(.horizontal, 34).padding(.bottom, 22)
     }
 
@@ -211,7 +236,7 @@ struct LauncherView: View {
                     } label: {
                         Circle().fill(Color(nsColor: NSColor(lunchpadHex: hex) ?? .systemIndigo))
                             .frame(width: 25, height: 25)
-                            .overlay(Circle().stroke(.white.opacity(store.backgroundHex == hex ? 0.9 : 0.25), lineWidth: store.backgroundHex == hex ? 2 : 1))
+                            .overlay(Circle().stroke(.primary.opacity(store.backgroundHex == hex ? 0.9 : 0.25), lineWidth: store.backgroundHex == hex ? 2 : 1))
                     }.buttonStyle(.plain).help(hex)
                 }
             }
@@ -229,14 +254,55 @@ struct LauncherView: View {
                     .font(.system(size: isRecordingShortcut ? 10 : 11, weight: .semibold, design: .rounded))
                     .lineLimit(1).minimumScaleFactor(0.7).allowsHitTesting(false)
             }
-            .background(isRecordingShortcut ? Color.cyan.opacity(0.19) : Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+            .background(isRecordingShortcut ? Color.cyan.opacity(0.19) : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
             .overlay {
                 RoundedRectangle(cornerRadius: 9)
-                    .stroke(isRecordingShortcut ? Color.cyan.opacity(0.95) : Color.white.opacity(0.17), lineWidth: isRecordingShortcut ? 2 : 1)
+                    .stroke(isRecordingShortcut ? Color.cyan.opacity(0.95) : Color.primary.opacity(0.17), lineWidth: isRecordingShortcut ? 2 : 1)
             }
             .shadow(color: .cyan.opacity(isRecordingShortcut ? 0.35 : 0), radius: 8)
             .animation(.easeInOut(duration: 0.16), value: isRecordingShortcut)
             .help("Нажмите и задайте новую горячую клавишу")
+    }
+
+    private var buttonColorEditor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Цвет кнопок").font(.system(size: 15, weight: .semibold))
+            HStack(spacing: 10) {
+                ColorPicker("", selection: Binding(
+                    get: { Color(nsColor: NSColor(lunchpadHex: store.customButtonHex) ?? .systemIndigo) },
+                    set: { color in
+                        if let hex = NSColor(color).lunchpadHex { store.customButtonHex = hex; buttonHexDraft = hex }
+                    }
+                ), supportsOpacity: false).labelsHidden()
+                TextField("#38BDF8", text: $buttonHexDraft)
+                    .textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
+                    .onChange(of: buttonHexDraft) { _, value in
+                        if let color = NSColor(lunchpadHex: value) { store.customButtonHex = color.lunchpadHex ?? store.customButtonHex }
+                    }
+            }
+        }
+    }
+
+    private var fullscreenWindowControls: some View {
+        HStack(spacing: 8) {
+            WindowTrafficLight(color: .systemRed, symbol: "xmark", title: "Закрыть") {
+                NSApp.keyWindow?.performClose(nil)
+            }
+            WindowTrafficLight(color: .systemYellow, symbol: "minus", title: "Свернуть") {
+                guard let window = NSApp.keyWindow else { return }
+                if window.styleMask.contains(.fullScreen) {
+                    window.toggleFullScreen(nil)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { window.miniaturize(nil) }
+                } else {
+                    window.miniaturize(nil)
+                }
+            }
+            WindowTrafficLight(color: .systemGreen, symbol: "arrow.up.left.and.arrow.down.right", title: "Выйти из полного экрана") {
+                NSApp.keyWindow?.toggleFullScreen(nil)
+            }
+        }
+        .padding(.trailing, 3)
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 
     private func prepareColorEditor() {
@@ -264,16 +330,34 @@ struct LauncherView: View {
 
 private struct FolderEditor: Identifiable { let id: UUID }
 
-private struct ToolbarIconStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 15, weight: .medium))
-            .frame(width: 36, height: 36)
-            .background(.white.opacity(configuration.isPressed ? 0.2 : 0.11), in: RoundedRectangle(cornerRadius: 12))
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+private struct WindowTrafficLight: View {
+    let color: NSColor
+    let symbol: String
+    let title: String
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(Color(nsColor: color))
+                .frame(width: 14, height: 14)
+                .overlay(Circle().stroke(.black.opacity(0.2), lineWidth: 0.7))
+                .overlay {
+                    Image(systemName: symbol)
+                        .font(.system(size: 7, weight: .black))
+                        .foregroundStyle(.black.opacity(0.7))
+                        .opacity(isHovering ? 1 : 0)
+                }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .accessibilityLabel(title)
+        .help(title)
     }
 }
 
-private extension NSColor {
+extension NSColor {
     convenience init?(lunchpadHex: String) {
         let hex = lunchpadHex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
         guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return nil }
