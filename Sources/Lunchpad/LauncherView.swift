@@ -8,21 +8,13 @@ struct LauncherView: View {
     @FocusState private var searchFocused: Bool
     @State private var renameFolderID: UUID?
     @State private var folderName = ""
-    @State private var showColorEditor = false
-    @State private var colorHexDraft = ""
-    @State private var showButtonColorEditor = false
-    @State private var buttonHexDraft = ""
     @State private var isRecordingShortcut = false
 
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 42)]
-    private let presets = ["#20283A", "#263C52", "#42344D", "#263F3B", "#493A32", "#17191F"]
 
     var body: some View {
         ZStack {
-            WindowBackdrop(
-                opacity: 1 - min(100, max(0, store.transparency)) / 100,
-                tint: NSColor(lunchpadHex: store.backgroundHex) ?? .systemIndigo
-            ).ignoresSafeArea()
+            WindowBackdrop().ignoresSafeArea()
             VStack(spacing: 0) {
                 header
                 ScrollView {
@@ -54,8 +46,20 @@ struct LauncherView: View {
         }
         .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 620)
-        .preferredColorScheme(store.colorTheme.colorScheme)
-        .tint(store.colorTheme.tint(customHex: store.customButtonHex))
+        .onAppear { searchFocused = true }
+        .onChange(of: store.onboardingStep) { oldStep, newStep in
+            if oldStep != nil && newStep == nil { searchFocused = true }
+        }
+        .onExitCommand {
+            if !store.searchText.isEmpty {
+                store.searchText = ""
+                searchFocused = true
+            } else if store.selectedFolder != nil {
+                store.closeFolder()
+            } else {
+                NSApp.hide(nil)
+            }
+        }
         .animation(.spring(response: 0.48, dampingFraction: 0.8), value: store.selectedFolder)
         .animation(.spring(response: 0.45, dampingFraction: 0.78), value: store.visibleApps.map(\.id))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.visibleFolders.map(\.id))
@@ -82,7 +86,11 @@ struct LauncherView: View {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Поиск приложений", text: $store.searchText).textFieldStyle(.plain).focused($searchFocused)
-                    .onSubmit { searchFocused = false }
+                    .onSubmit {
+                        guard !store.searchText.isEmpty else { return }
+                        if let app = store.visibleApps.first { store.open(app) }
+                        else if let folder = store.visibleFolders.first { store.openFolder(folder.id) }
+                    }
                 if !store.searchText.isEmpty {
                     Button { store.searchText = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.buttonStyle(.plain)
                 }
@@ -94,17 +102,7 @@ struct LauncherView: View {
             Spacer(minLength: 30)
             Menu {
                 Button("Новая папка", systemImage: "folder.badge.plus") { store.createFolder() }
-                Button(store.isEditing ? "Готово" : "Настроить оформление", systemImage: store.isEditing ? "checkmark" : "slider.horizontal.3") { store.isEditing.toggle() }
-                Menu("Цветовое оформление") {
-                    ForEach(LauncherColorTheme.allCases) { theme in
-                        Button {
-                            store.colorTheme = theme
-                        } label: {
-                            if store.colorTheme == theme { Label(theme.title, systemImage: "checkmark") }
-                            else { Text(theme.title) }
-                        }
-                    }
-                }
+                Button(store.isEditing ? "Готово" : "Настройки", systemImage: store.isEditing ? "checkmark" : "slider.horizontal.3") { store.isEditing.toggle() }
             } label: {
                 Image(systemName: store.isEditing ? "checkmark" : "slider.horizontal.3")
                     .font(.system(size: 15, weight: .medium))
@@ -113,7 +111,7 @@ struct LauncherView: View {
                     .overlay(Circle().stroke(.primary.opacity(0.22), lineWidth: 1))
             }
             .menuStyle(.borderlessButton)
-            .help("Настройки и папки")
+            .help("Настройки")
         }
         .padding(.horizontal, 54).padding(.top, 34).padding(.bottom, 14)
     }
@@ -137,7 +135,7 @@ struct LauncherView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 150)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { store.openFolder(folder.id) }
+        .onTapGesture { store.openFolder(folder.id) }
         .contextMenu {
             Button("Открыть папку") { store.openFolder(folder.id) }
             Button("Переименовать") { folderName = folder.name; renameFolderID = folder.id }
@@ -160,7 +158,7 @@ struct LauncherView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 150)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { store.open(app) }
+        .onTapGesture { store.open(app) }
         .draggable(app.path)
         .contextMenu {
             Button("Открыть") { store.open(app) }
@@ -181,31 +179,13 @@ struct LauncherView: View {
             }
             return true
         }
-        .help("Дважды нажмите, чтобы открыть · Перетащите на приложение, чтобы создать папку")
+        .help("Нажмите, чтобы открыть · Перетащите на приложение, чтобы создать папку")
     }
 
     private var footer: some View {
         HStack(spacing: 16) {
-            Image(systemName: "circle.lefthalf.filled")
-            Slider(value: $store.transparency, in: 0...100, step: 1).frame(width: 190)
-            Text("Прозрачность \(Int(store.transparency))%")
-                .font(.system(size: 12, weight: .medium, design: .rounded)).monospacedDigit().frame(width: 132, alignment: .leading)
-            Button { prepareColorEditor() } label: { Label("Цвет", systemImage: "paintpalette") }
-                .buttonStyle(.bordered).disabled(store.transparency != 0)
-                .popover(isPresented: $showColorEditor, arrowEdge: .top) { colorEditor.padding(18).frame(width: 280) }
-                .help(store.transparency == 0 ? "Выбрать цвет фона" : "Установите прозрачность 0%, чтобы выбрать цвет")
-            if store.colorTheme == .custom {
-                Button {
-                    buttonHexDraft = store.customButtonHex
-                    showButtonColorEditor = true
-                } label: { Label("Цвет кнопок", systemImage: "circle.lefthalf.filled") }
-                    .buttonStyle(.bordered)
-                    .popover(isPresented: $showButtonColorEditor, arrowEdge: .top) {
-                        buttonColorEditor.padding(18).frame(width: 260)
-                    }
-            }
-            Divider().frame(height: 22)
             hotKeyControl
+            Divider().frame(height: 22)
             Toggle("Автозапуск", isOn: Binding(get: { store.startupEnabled }, set: { store.setLaunchAtLogin($0) }))
                 .toggleStyle(.switch).font(.system(size: 12, weight: .medium)).fixedSize()
         }
@@ -213,37 +193,6 @@ struct LauncherView: View {
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().stroke(.primary.opacity(0.16), lineWidth: 1))
         .padding(.horizontal, 34).padding(.bottom, 22)
-    }
-
-    private var colorEditor: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Цвет фона").font(.system(size: 15, weight: .semibold))
-            HStack(spacing: 10) {
-                ColorPicker("", selection: Binding(
-                    get: { Color(nsColor: NSColor(lunchpadHex: store.backgroundHex) ?? .systemIndigo) },
-                    set: { color in if let hex = NSColor(color).lunchpadHex { store.backgroundHex = hex; colorHexDraft = hex } }
-                ), supportsOpacity: false).labelsHidden()
-                TextField("#20283A", text: $colorHexDraft).textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
-                    .onChange(of: colorHexDraft) { _, value in
-                        if let color = NSColor(lunchpadHex: value) { store.backgroundHex = color.lunchpadHex ?? store.backgroundHex }
-                    }
-            }
-            HStack(spacing: 9) {
-                ForEach(presets, id: \.self) { hex in
-                    Button {
-                        store.backgroundHex = hex
-                        colorHexDraft = hex
-                    } label: {
-                        Circle().fill(Color(nsColor: NSColor(lunchpadHex: hex) ?? .systemIndigo))
-                            .frame(width: 25, height: 25)
-                            .overlay(Circle().stroke(.primary.opacity(store.backgroundHex == hex ? 0.9 : 0.25), lineWidth: store.backgroundHex == hex ? 2 : 1))
-                    }.buttonStyle(.plain).help(hex)
-                }
-            }
-            Text("HEX · RGB-колесо доступно в системном выборе цвета")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-        }
-        .onAppear { colorHexDraft = store.backgroundHex }
     }
 
     private var hotKeyControl: some View {
@@ -262,25 +211,6 @@ struct LauncherView: View {
             .shadow(color: .cyan.opacity(isRecordingShortcut ? 0.35 : 0), radius: 8)
             .animation(.easeInOut(duration: 0.16), value: isRecordingShortcut)
             .help("Нажмите и задайте новую горячую клавишу")
-    }
-
-    private var buttonColorEditor: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Цвет кнопок").font(.system(size: 15, weight: .semibold))
-            HStack(spacing: 10) {
-                ColorPicker("", selection: Binding(
-                    get: { Color(nsColor: NSColor(lunchpadHex: store.customButtonHex) ?? .systemIndigo) },
-                    set: { color in
-                        if let hex = NSColor(color).lunchpadHex { store.customButtonHex = hex; buttonHexDraft = hex }
-                    }
-                ), supportsOpacity: false).labelsHidden()
-                TextField("#38BDF8", text: $buttonHexDraft)
-                    .textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
-                    .onChange(of: buttonHexDraft) { _, value in
-                        if let color = NSColor(lunchpadHex: value) { store.customButtonHex = color.lunchpadHex ?? store.customButtonHex }
-                    }
-            }
-        }
     }
 
     private var fullscreenWindowControls: some View {
@@ -303,11 +233,6 @@ struct LauncherView: View {
         }
         .padding(.trailing, 3)
         .transition(.opacity.combined(with: .scale(scale: 0.9)))
-    }
-
-    private func prepareColorEditor() {
-        colorHexDraft = store.backgroundHex
-        showColorEditor = true
     }
 
     private func updateShortcut(keyCode: UInt16, modifiers: UInt32) {
@@ -354,20 +279,5 @@ private struct WindowTrafficLight: View {
         .onHover { isHovering = $0 }
         .accessibilityLabel(title)
         .help(title)
-    }
-}
-
-extension NSColor {
-    convenience init?(lunchpadHex: String) {
-        let hex = lunchpadHex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return nil }
-        self.init(srgbRed: CGFloat((value >> 16) & 0xff) / 255,
-                  green: CGFloat((value >> 8) & 0xff) / 255,
-                  blue: CGFloat(value & 0xff) / 255, alpha: 1)
-    }
-
-    var lunchpadHex: String? {
-        guard let rgb = usingColorSpace(.deviceRGB) else { return nil }
-        return String(format: "#%02X%02X%02X", Int(rgb.redComponent * 255), Int(rgb.greenComponent * 255), Int(rgb.blueComponent * 255))
     }
 }

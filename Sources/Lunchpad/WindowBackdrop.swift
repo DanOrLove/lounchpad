@@ -1,19 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// A real behind-window material whose opacity can be driven all the way to clear.
+/// A fixed macOS desktop material for the launcher's translucent backdrop.
 struct WindowBackdrop: NSViewRepresentable {
-    let opacity: Double
-    let tint: NSColor
-
     func makeNSView(context: Context) -> BackdropHostView {
         let view = BackdropHostView()
-        view.update(opacity: opacity, tint: tint)
         return view
     }
 
     func updateNSView(_ view: BackdropHostView, context: Context) {
-        view.update(opacity: opacity, tint: tint)
+        view.update()
     }
 }
 
@@ -49,13 +45,14 @@ final class BackdropHostView: NSView {
             tintView.topAnchor.constraint(equalTo: topAnchor),
             tintView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+        update()
     }
 
     required init?(coder: NSCoder) { nil }
 
-    func update(opacity: Double, tint: NSColor) {
-        let value = CGFloat(min(1, max(0, opacity)))
-        materialView.alphaValue = value
-        tintView.layer?.backgroundColor = tint.withAlphaComponent(value).cgColor
+    func update() {
+        materialView.alphaValue = 1
+        let glassTint = NSColor(srgbRed: 0.14, green: 0.19, blue: 0.34, alpha: 0.13)
+        tintView.layer?.backgroundColor = glassTint.cgColor
     }
 }

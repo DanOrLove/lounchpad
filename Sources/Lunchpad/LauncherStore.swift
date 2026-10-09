@@ -17,65 +17,11 @@ struct LauncherFolder: Identifiable, Codable, Hashable {
     var appPaths: [String]
 }
 
-enum LauncherColorTheme: String, CaseIterable, Identifiable {
-    case black
-    case white
-    case custom
-    case system
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .black: "Чёрная"
-        case .white: "Белая"
-        case .custom: "Настраиваемая"
-        case .system: "Системная"
-        }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .black: .dark
-        case .white: .light
-        case .custom, .system: nil
-        }
-    }
-
-    func tint(customHex: String) -> Color? {
-        switch self {
-        case .black: .white
-        case .white: .black
-        case .custom: Color(nsColor: NSColor(lunchpadHex: customHex) ?? .systemIndigo)
-        case .system: nil
-        }
-    }
-}
-
 @MainActor
 final class LauncherStore: ObservableObject {
     @Published private(set) var apps: [LauncherApp] = []
     @Published var folders: [LauncherFolder] = []
     @Published var searchText = ""
-    @Published var transparency: Double = 72 {
-        didSet {
-            transparencySaveTask?.cancel()
-            transparencySaveTask = Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(140))
-                guard !Task.isCancelled, let self else { return }
-                UserDefaults.standard.set(self.transparency, forKey: "windowTransparency")
-            }
-        }
-    }
-    @Published var backgroundHex: String = UserDefaults.standard.string(forKey: "windowBackgroundHex") ?? "#20283A" {
-        didSet { UserDefaults.standard.set(backgroundHex, forKey: "windowBackgroundHex") }
-    }
-    @Published var colorTheme: LauncherColorTheme = LauncherColorTheme(rawValue: UserDefaults.standard.string(forKey: "launcherColorTheme") ?? "system") ?? .system {
-        didSet { UserDefaults.standard.set(colorTheme.rawValue, forKey: "launcherColorTheme") }
-    }
-    @Published var customButtonHex: String = UserDefaults.standard.string(forKey: "customButtonHex") ?? "#38BDF8" {
-        didSet { UserDefaults.standard.set(customButtonHex, forKey: "customButtonHex") }
-    }
     @Published var selectedFolder: UUID?
     @Published var isEditing = false
     @Published var onboardingStep: Int? = LauncherStore.initialOnboardingStep()
@@ -85,8 +31,6 @@ final class LauncherStore: ObservableObject {
     @Published var startupError: String?
 
     private let folderURL: URL
-    private var transparencySaveTask: Task<Void, Never>?
-
     private static func initialOnboardingStep() -> Int? {
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: "didShowOnboarding") { return nil }
@@ -99,17 +43,12 @@ final class LauncherStore: ObservableObject {
     }
 
     init() {
+        ["windowTransparency", "windowBackgroundHex", "launcherColorTheme", "customButtonHex"]
+            .forEach { UserDefaults.standard.removeObject(forKey: $0) }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Lunchpad", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         folderURL = support.appendingPathComponent("folders.json")
-        if let savedTransparency = UserDefaults.standard.object(forKey: "windowTransparency") as? Double {
-            // Earlier builds saved this value as a 0...1 fraction.
-            transparency = savedTransparency <= 1 ? savedTransparency * 100 : min(100, max(0, savedTransparency))
-        } else {
-            transparency = 72
-        }
-        if backgroundHex.count != 7 || !backgroundHex.hasPrefix("#") { backgroundHex = "#20283A" }
         loadFolders()
         reloadApps()
     }
@@ -165,7 +104,7 @@ final class LauncherStore: ObservableObject {
     }
 
     func open(_ app: LauncherApp) {
-        NSWorkspace.shared.open(URL(fileURLWithPath: app.path))
+        if NSWorkspace.shared.open(URL(fileURLWithPath: app.path)) { NSApp.hide(nil) }
     }
 
     func installSavedShortcut() {
