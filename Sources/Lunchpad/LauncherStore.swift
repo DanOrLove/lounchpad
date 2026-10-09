@@ -1,5 +1,8 @@
 import AppKit
+import Carbon.HIToolbox
 import Foundation
+import ServiceManagement
+import SwiftUI
 
 struct LauncherApp: Identifiable, Hashable {
     let id: String
@@ -24,8 +27,24 @@ final class LauncherStore: ObservableObject {
     }
     @Published var selectedFolder: UUID?
     @Published var isEditing = false
+    @Published var onboardingStep: Int? = LauncherStore.initialOnboardingStep()
+    @Published var shortcutKeyCode: UInt16 = UInt16(UserDefaults.standard.integer(forKey: "launcherShortcutKeyCode"))
+    @Published var shortcutModifiers: UInt32 = UInt32(UserDefaults.standard.integer(forKey: "launcherShortcutModifiers"))
+    @Published var startupEnabled = SMAppService.mainApp.status == .enabled || SMAppService.mainApp.status == .requiresApproval
+    @Published var startupError: String?
 
     private let folderURL: URL
+
+    private static func initialOnboardingStep() -> Int? {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "didShowOnboarding") { return nil }
+        if defaults.bool(forKey: "didCompleteOnboarding") {
+            defaults.set(true, forKey: "didShowOnboarding")
+            return nil
+        }
+        defaults.set(true, forKey: "didShowOnboarding")
+        return 0
+    }
 
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -48,6 +67,15 @@ final class LauncherStore: ObservableObject {
         }
         guard !query.isEmpty else { return candidates }
         return candidates.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    var shortcutTitle: String {
+        var title = ""
+        if shortcutModifiers & UInt32(cmdKey) != 0 { title += "⌘" }
+        if shortcutModifiers & UInt32(optionKey) != 0 { title += "⌥" }
+        if shortcutModifiers & UInt32(controlKey) != 0 { title += "⌃" }
+        if shortcutModifiers & UInt32(shiftKey) != 0 { title += "⇧" }
+        return title + GlobalHotKeyManager.keyName(for: shortcutKeyCode)
     }
 
     func reloadApps() {
@@ -73,6 +101,49 @@ final class LauncherStore: ObservableObject {
 
     func open(_ app: LauncherApp) {
         NSWorkspace.shared.open(URL(fileURLWithPath: app.path))
+    }
+
+    func installSavedShortcut() {
+        if UserDefaults.standard.object(forKey: "launcherShortcutKeyCode") == nil {
+            shortcutKeyCode = 49 // Space
+            shortcutModifiers = UInt32(optionKey)
+            UserDefaults.standard.set(Int(shortcutKeyCode), forKey: "launcherShortcutKeyCode")
+            UserDefaults.standard.set(Int(shortcutModifiers), forKey: "launcherShortcutModifiers")
+        }
+        GlobalHotKeyManager.shared.action = {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        }
+        try? GlobalHotKeyManager.shared.register(keyCode: shortcutKeyCode, modifiers: shortcutModifiers)
+    }
+
+    func setShortcut(keyCode: UInt16, modifiers: UInt32) throws {
+        try GlobalHotKeyManager.shared.register(keyCode: keyCode, modifiers: modifiers)
+        shortcutKeyCode = keyCode
+        shortcutModifiers = modifiers
+        UserDefaults.standard.set(Int(keyCode), forKey: "launcherShortcutKeyCode")
+        UserDefaults.standard.set(Int(modifiers), forKey: "launcherShortcutModifiers")
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled { try SMAppService.mainApp.register() }
+            else { try SMAppService.mainApp.unregister() }
+            let status = SMAppService.mainApp.status
+            startupEnabled = status == .enabled || status == .requiresApproval
+            startupError = status == .requiresApproval
+                ? "Разрешите Lunchpad в Системных настройках → Основные → Объекты входа."
+                : nil
+        } catch {
+            startupError = error.localizedDescription
+            startupEnabled = SMAppService.mainApp.status == .enabled || SMAppService.mainApp.status == .requiresApproval
+        }
+    }
+
+    func finishOnboarding() {
+        UserDefaults.standard.set(true, forKey: "didCompleteOnboarding")
+        UserDefaults.standard.set(true, forKey: "didShowOnboarding")
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.88)) { onboardingStep = nil }
     }
 
     func openFolder(_ id: UUID) { selectedFolder = id }

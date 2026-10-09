@@ -19,7 +19,10 @@ struct LauncherView: View {
                 if !store.folders.isEmpty && store.selectedFolder == nil { folderStrip }
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 24) {
-                        ForEach(store.visibleApps) { app in appTile(app) }
+                        ForEach(store.visibleApps) { app in
+                            appTile(app)
+                                .transition(.scale(scale: 0.9).combined(with: .opacity))
+                        }
                     }
                     .padding(.horizontal, 30)
                     .padding(.vertical, 24)
@@ -34,11 +37,20 @@ struct LauncherView: View {
                 footer
             }
             .padding(12)
+            if store.onboardingStep != nil {
+                OnboardingView()
+                    .environmentObject(store)
+                    .transition(.opacity)
+                    .zIndex(2)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .padding(10)
         .frame(minWidth: 680, minHeight: 520)
         .preferredColorScheme(.dark)
+        .animation(.spring(response: 0.42, dampingFraction: 0.84), value: store.selectedFolder)
+        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: store.visibleApps.map(\.id))
+        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: store.isEditing)
         .sheet(item: Binding(get: { renameFolderID.map(FolderEditor.init(id:)) }, set: { renameFolderID = $0?.id })) { editor in
             folderEditor(editor.id)
         }
@@ -56,6 +68,7 @@ struct LauncherView: View {
                 Text(store.selectedFolder == nil ? "\(store.apps.count) приложений" : "Папка")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
+            .contentTransition(.opacity)
             Spacer()
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -115,7 +128,6 @@ struct LauncherView: View {
         .frame(maxWidth: .infinity, minHeight: 112)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { store.open(app) }
-        .onTapGesture(count: 1) { }
         .draggable(app.path)
         .contextMenu {
             Button("Открыть") { store.open(app) }
@@ -152,6 +164,18 @@ struct LauncherView: View {
                     .frame(width: 150)
                 Text("Прозрачность \(Int(store.transparency * 100))%")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                Divider().frame(height: 18)
+                HotKeyCaptureView(isRecording: .constant(false)) { keyCode, modifiers in
+                    do { try store.setShortcut(keyCode: keyCode, modifiers: modifiers) }
+                    catch { store.startupError = error.localizedDescription }
+                }
+                .frame(width: 86, height: 27)
+                .overlay(Text(store.shortcutTitle).font(.system(size: 11, weight: .semibold, design: .rounded)).allowsHitTesting(false))
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                .help("Нажмите и задайте новую горячую клавишу")
+                Toggle("Автозапуск", isOn: Binding(get: { store.startupEnabled }, set: { store.setLaunchAtLogin($0) }))
+                    .toggleStyle(.switch).font(.system(size: 11, weight: .medium))
+                    .fixedSize().help("Запускать Lunchpad при входе в macOS")
             } else {
                 Text(store.selectedFolder == nil ? "Двойное нажатие — открыть приложение" : "Перетяните сюда приложение, чтобы добавить его в папку")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
