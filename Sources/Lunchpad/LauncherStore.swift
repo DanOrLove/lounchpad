@@ -23,7 +23,14 @@ final class LauncherStore: ObservableObject {
     @Published var folders: [LauncherFolder] = []
     @Published var searchText = ""
     @Published var transparency: Double = 72 {
-        didSet { UserDefaults.standard.set(transparency, forKey: "windowTransparency") }
+        didSet {
+            transparencySaveTask?.cancel()
+            transparencySaveTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(140))
+                guard !Task.isCancelled, let self else { return }
+                UserDefaults.standard.set(self.transparency, forKey: "windowTransparency")
+            }
+        }
     }
     @Published var backgroundHex: String = UserDefaults.standard.string(forKey: "windowBackgroundHex") ?? "#20283A" {
         didSet { UserDefaults.standard.set(backgroundHex, forKey: "windowBackgroundHex") }
@@ -37,6 +44,7 @@ final class LauncherStore: ObservableObject {
     @Published var startupError: String?
 
     private let folderURL: URL
+    private var transparencySaveTask: Task<Void, Never>?
 
     private static func initialOnboardingStep() -> Int? {
         let defaults = UserDefaults.standard

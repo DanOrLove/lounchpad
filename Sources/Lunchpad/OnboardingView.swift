@@ -160,6 +160,7 @@ struct HotKeyCaptureView: NSViewRepresentable {
     func makeNSView(context: Context) -> HotKeyCaptureNSView {
         let view = HotKeyCaptureNSView()
         view.isRecording = isRecording
+        view.onRecordingStart = { isRecording = true }
         view.onCapture = { keyCode, flags in
             onCapture(keyCode, Self.carbonModifiers(from: flags))
             isRecording = false
@@ -169,6 +170,7 @@ struct HotKeyCaptureView: NSViewRepresentable {
 
     func updateNSView(_ view: HotKeyCaptureNSView, context: Context) {
         view.isRecording = isRecording
+        view.onRecordingStart = { isRecording = true }
         view.onCapture = { keyCode, flags in
             onCapture(keyCode, Self.carbonModifiers(from: flags))
             isRecording = false
@@ -188,11 +190,13 @@ struct HotKeyCaptureView: NSViewRepresentable {
 @MainActor
 final class HotKeyCaptureNSView: NSView {
     var isRecording = false
+    var onRecordingStart: (() -> Void)?
     var onCapture: ((UInt16, NSEvent.ModifierFlags) -> Void)?
     override var acceptsFirstResponder: Bool { true }
 
     override func mouseDown(with event: NSEvent) {
         isRecording = true
+        onRecordingStart?()
         window?.makeFirstResponder(self)
     }
 

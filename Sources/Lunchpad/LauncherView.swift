@@ -9,15 +9,16 @@ struct LauncherView: View {
     @State private var folderName = ""
     @State private var showColorEditor = false
     @State private var colorHexDraft = ""
+    @State private var isRecordingShortcut = false
 
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 42)]
     private let presets = ["#20283A", "#263C52", "#42344D", "#263F3B", "#493A32", "#17191F"]
 
     var body: some View {
         ZStack {
-            Rectangle().fill(.ultraThinMaterial)
-            Color(nsColor: NSColor(lunchpadHex: store.backgroundHex) ?? .systemIndigo)
-                .opacity(1 - min(100, max(0, store.transparency)) / 100)
+            let backgroundOpacity = 1 - min(100, max(0, store.transparency)) / 100
+            Rectangle().fill(.ultraThinMaterial).opacity(backgroundOpacity)
+            Color(nsColor: NSColor(lunchpadHex: store.backgroundHex) ?? .systemIndigo).opacity(backgroundOpacity)
             VStack(spacing: 0) {
                 header
                 ScrollView {
@@ -54,12 +55,6 @@ struct LauncherView: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.78), value: store.visibleApps.map(\.id))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.visibleFolders.map(\.id))
         .animation(.spring(response: 0.38, dampingFraction: 0.8), value: store.isEditing)
-        .onChange(of: store.transparency) { _, value in
-            if value == 0 && store.isEditing { prepareColorEditor() }
-        }
-        .onChange(of: store.isEditing) { _, editing in
-            if editing && store.transparency == 0 { prepareColorEditor() }
-        }
         .sheet(item: Binding(get: { renameFolderID.map(FolderEditor.init(id:)) }, set: { renameFolderID = $0?.id })) { editor in
             folderEditor(editor.id)
         }
@@ -180,20 +175,12 @@ struct LauncherView: View {
             Slider(value: $store.transparency, in: 0...100, step: 1).frame(width: 190)
             Text("Прозрачность \(Int(store.transparency))%")
                 .font(.system(size: 12, weight: .medium, design: .rounded)).monospacedDigit().frame(width: 132, alignment: .leading)
-            if store.transparency == 0 {
-                Button { prepareColorEditor() } label: { Label("Цвет", systemImage: "paintpalette") }
-                    .buttonStyle(.bordered).popover(isPresented: $showColorEditor, arrowEdge: .top) { colorEditor.padding(18).frame(width: 280) }
-                    .help("Выбрать цвет фона")
-            }
+            Button { prepareColorEditor() } label: { Label("Цвет", systemImage: "paintpalette") }
+                .buttonStyle(.bordered).disabled(store.transparency != 0)
+                .popover(isPresented: $showColorEditor, arrowEdge: .top) { colorEditor.padding(18).frame(width: 280) }
+                .help(store.transparency == 0 ? "Выбрать цвет фона" : "Установите прозрачность 0%, чтобы выбрать цвет")
             Divider().frame(height: 22)
-            HotKeyCaptureView(isRecording: .constant(false)) { keyCode, modifiers in
-                do { try store.setShortcut(keyCode: keyCode, modifiers: modifiers) }
-                catch { store.startupError = error.localizedDescription }
-            }
-            .frame(width: 86, height: 28)
-            .overlay(Text(store.shortcutTitle).font(.system(size: 11, weight: .semibold, design: .rounded)).allowsHitTesting(false))
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-            .help("Нажмите и задайте новую горячую клавишу")
+            hotKeyControl
             Toggle("Автозапуск", isOn: Binding(get: { store.startupEnabled }, set: { store.setLaunchAtLogin($0) }))
                 .toggleStyle(.switch).font(.system(size: 12, weight: .medium)).fixedSize()
         }
@@ -234,9 +221,32 @@ struct LauncherView: View {
         .onAppear { colorHexDraft = store.backgroundHex }
     }
 
+    private var hotKeyControl: some View {
+        HotKeyCaptureView(isRecording: $isRecordingShortcut, onCapture: updateShortcut)
+            .frame(width: 120, height: 32)
+            .overlay {
+                Text(isRecordingShortcut ? "Нажмите клавишу…" : store.shortcutTitle)
+                    .font(.system(size: isRecordingShortcut ? 10 : 11, weight: .semibold, design: .rounded))
+                    .lineLimit(1).minimumScaleFactor(0.7).allowsHitTesting(false)
+            }
+            .background(isRecordingShortcut ? Color.cyan.opacity(0.19) : Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(isRecordingShortcut ? Color.cyan.opacity(0.95) : Color.white.opacity(0.17), lineWidth: isRecordingShortcut ? 2 : 1)
+            }
+            .shadow(color: .cyan.opacity(isRecordingShortcut ? 0.35 : 0), radius: 8)
+            .animation(.easeInOut(duration: 0.16), value: isRecordingShortcut)
+            .help("Нажмите и задайте новую горячую клавишу")
+    }
+
     private func prepareColorEditor() {
         colorHexDraft = store.backgroundHex
         showColorEditor = true
+    }
+
+    private func updateShortcut(keyCode: UInt16, modifiers: UInt32) {
+        do { try store.setShortcut(keyCode: keyCode, modifiers: modifiers) }
+        catch { store.startupError = error.localizedDescription }
     }
 
     private func folderEditor(_ id: UUID) -> some View {

@@ -1,60 +1,67 @@
 # Lunchpad
 
-Нативный лаунчер приложений для macOS на SwiftUI. Показывает приложения из `/Applications`, помогает находить их, запускать и собирать в папки. Окно поддерживает настройку прозрачности, а интерфейс открывается в полноэкранном режиме.
+Открытый лаунчер для macOS на SwiftUI. Он показывает приложения из `/Applications`, помогает искать и раскладывать их по папкам. Можно настроить прозрачность фона, горячую клавишу и автозапуск.
 
-**Скачать установщик:** [Lunchpad-v0.1.0.dmg](dist/Lunchpad-v0.1.0.dmg) — откройте образ и перетащите `Lunchpad.app` в `Applications`.
+## Установить приложение
 
-### Установка на macOS
+1. [Скачайте Lunchpad](dist/Lunchpad-v0.1.0.dmg) и откройте файл DMG.
+2. Перетащите `Lunchpad.app` в папку `Applications`, затем извлеките образ DMG.
+3. При первом запуске нажмите на приложение правой кнопкой в Finder, выберите **Открыть** и подтвердите запуск. Это разовое подтверждение macOS для сборки без подписи Developer ID.
 
-После копирования извлеките образ DMG и запускайте приложение из папки `Applications`. Эта открытая сборка не подписана сертификатом Developer ID и не нотарифицирована Apple: при первом запуске macOS может показать предупреждение о неизвестном разработчике. В Finder нажмите на `Lunchpad.app` правой кнопкой мыши (или Control-клик), выберите **Открыть** и подтвердите запуск в диалоге. Это разрешение требуется только при первом запуске. Если macOS показывает сообщение о повреждённом приложении или другая ошибка повторяется, приложите снимок этого сообщения к GitHub Issue: без точного текста нельзя отличить проверку Gatekeeper от ошибки копирования или несовместимости.
+При первом запуске Lunchpad покажет короткое знакомство. Там можно назначить клавишу или сочетание для открытия лаунчера и включить автозапуск. Позже эти настройки доступны в меню рядом с поиском.
 
-При первом открытии появляется короткое знакомство. Его экран показывается один раз; в нём можно назначить глобальную клавишу/сочетание и включить запуск при входе в macOS. Настройки горячей клавиши и автозапуска доступны и после знакомства.
+## Собрать из исходников
 
-## Возможности
+Нужны macOS 14 или новее, Swift 6 и Command Line Tools for Xcode.
 
-- Поиск и запуск приложений из системной папки `/Applications`.
-- Создание папок и перенос приложений между ними.
-- Настраиваемая прозрачность окна от 0 до 100%, с выбором цвета фона при 0%.
-- Полноэкранный запуск и анимированные переходы.
-- Глобальная горячая клавиша.
-- Автозапуск через macOS Service Management.
+1. Установите Command Line Tools, если они ещё не установлены: `xcode-select --install`.
+2. Склонируйте проект и перейдите в его папку:
 
-## Сборка из исходников
+   ```sh
+   git clone https://github.com/DanOrLove/lounchpad.git
+   cd lounchpad
+   ```
 
-Требуются macOS 14 или новее, Swift 6 и Command Line Tools for Xcode. Встроенный скрипт создаёт значки нужных размеров при помощи `sips` и `iconutil`.
+3. Соберите приложение и установщик:
 
-```sh
-git clone https://github.com/DanOrLove/lounchpad.git
-cd lounchpad
-./build-app.sh       # dist/Lunchpad.app
-./build-dmg.sh       # dist/Lunchpad-v0.1.0.dmg
-# или обе команды за один раз:
-./build-release.sh
-```
+   ```sh
+   ./build-release.sh
+   ```
 
-Чтобы подписать приложение своим сертификатом Developer ID Application, укажите его точное имя при сборке:
+Готовое приложение появится в `dist/Lunchpad.app`, установщик — в `dist/Lunchpad-v0.1.0.dmg`. Команда `./build-app.sh` собирает только приложение, а `./build-dmg.sh` создаёт DMG из уже собранного приложения.
+
+Для публикации с подписью Developer ID задайте имя сертификата при сборке:
 
 ```sh
 LUNCHPAD_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./build-release.sh
 ```
 
-macOS требует подходящую подпись для регистрации приложения как объекта входа. Для разработки без сертификата приложение и установщик всё равно соберутся, но при включении автозапуска macOS может показать ошибку Service Management. Не подписанный Developer ID образ также может потребовать ручного подтверждения при первом открытии.
+Для распространения через Developer ID также нужна нотарификация Apple. Без сертификата macOS попросит вручную подтвердить первый запуск; автозапуск может потребовать разрешения в **Системные настройки → Основные → Объекты входа**.
 
-## Структура проекта
+## Разработка
 
-- `Sources/Lunchpad/LauncherStore.swift` — состояние приложения, сканирование приложений, папки, горячая клавиша и автозапуск.
-- `Sources/Lunchpad/LauncherView.swift` — основная сетка и взаимодействия.
-- `Sources/Lunchpad/OnboardingView.swift` — знакомство и запись горячей клавиши.
-- `Sources/Lunchpad/GlobalHotKeyManager.swift` — системная регистрация горячей клавиши.
-- `Scripts/GenerateIcon.swift` — генерация иконки приложения.
-- `build-app.sh`, `build-dmg.sh`, `build-release.sh` — сборка приложения и установщика.
+- `Sources/Lunchpad/LauncherView.swift` — интерфейс, сетка приложений, папки и настройки вида.
+- `Sources/Lunchpad/LauncherStore.swift` — приложения, папки и пользовательские настройки.
+- `Sources/Lunchpad/OnboardingView.swift` — первое знакомство и захват горячей клавиши.
+- `Sources/Lunchpad/GlobalHotKeyManager.swift` — системная горячая клавиша.
+- `Scripts/GenerateIcon.swift` — генерация значка приложения.
 
-## Участие в разработке
-
-Изменения можно предлагать через GitHub Issues и Pull Requests. Сборка использует только SwiftPM и системные инструменты macOS; сторонние Swift-зависимости не нужны. Проект распространяется по лицензии MIT, см. [LICENSE](LICENSE).
+Сторонние Swift-пакеты не используются. Предложения и исправления можно отправлять через GitHub Issues и Pull Requests. Лицензия проекта — MIT: [LICENSE](LICENSE).
 
 ## English
 
-Lunchpad is a native SwiftUI application launcher for macOS. It lists apps from `/Applications`, supports search, folders, adjustable 0–100% window transparency and background color, full-screen launch, global hotkeys, and login launch configuration.
+Lunchpad is an open-source SwiftUI launcher for macOS. It lists apps from `/Applications` and supports search, folders, adjustable background transparency, a global shortcut, and launch at login.
 
-Download `dist/Lunchpad-v0.1.0.dmg`, open it, and drag `Lunchpad.app` to `Applications`. This community build is not Developer ID signed or notarized; on first launch, Control-click the app in Finder and choose Open. To build from source, use macOS 14+, Swift 6, and Xcode Command Line Tools, then run `./build-release.sh`. A Developer ID Application certificate is needed for notarized distribution and macOS login-item registration. Contributions are welcome under the MIT license.
+### Install
+
+1. [Download the DMG](dist/Lunchpad-v0.1.0.dmg) and open it.
+2. Drag `Lunchpad.app` to `Applications`, then eject the mounted disk image.
+3. On first launch, Control-click the app in Finder, choose **Open**, and confirm. This one-time confirmation is required for the unsigned community build.
+
+### Build
+
+1. Install macOS 14+, Swift 6, and Xcode Command Line Tools.
+2. Clone the repository: `git clone https://github.com/DanOrLove/lounchpad.git`, then `cd lounchpad`.
+3. Run `./build-release.sh`. The app and DMG are written to `dist/`.
+
+Pull Requests are welcome. The project is licensed under MIT.

@@ -12,7 +12,6 @@ struct LunchpadApp: App {
                 .frame(minWidth: 680, minHeight: 520)
                 .onAppear { store.installSavedShortcut() }
         }
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 920, height: 660)
         .commands {
             CommandGroup(replacing: .newItem) { }
@@ -42,6 +41,9 @@ struct WindowConfigurator: NSViewRepresentable {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
+        window.standardWindowButton(.closeButton)?.isHidden = false
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+        window.standardWindowButton(.zoomButton)?.isHidden = false
         guard !coordinator.didRequestFullScreen else { return }
         coordinator.didRequestFullScreen = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
