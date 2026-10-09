@@ -85,20 +85,25 @@ struct LauncherView: View {
                 if !store.searchText.isEmpty {
                     Button { store.searchText = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.buttonStyle(.plain)
                 }
-                Menu {
-                    Button("Новая папка", systemImage: "folder.badge.plus") { store.createFolder() }
-                    Button(store.isEditing ? "Готово" : "Настроить оформление", systemImage: store.isEditing ? "checkmark" : "slider.horizontal.3") { store.isEditing.toggle() }
-                    Button("Обновить приложения", systemImage: "arrow.clockwise") { store.reloadApps() }
-                } label: { Image(systemName: "ellipsis.circle").font(.system(size: 18)).foregroundStyle(.secondary) }
-                    .menuStyle(.borderlessButton).frame(width: 22)
             }
             .padding(.horizontal, 15).padding(.vertical, 10)
             .frame(width: 320)
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().stroke(.white.opacity(0.22), lineWidth: 1))
             Spacer(minLength: 30)
-            Button { store.isEditing.toggle() } label: { Image(systemName: store.isEditing ? "checkmark" : "slider.horizontal.3") }
-                .buttonStyle(ToolbarIconStyle()).help("Настроить оформление")
+            Menu {
+                Button("Новая папка", systemImage: "folder.badge.plus") { store.createFolder() }
+                Button(store.isEditing ? "Готово" : "Настроить оформление", systemImage: store.isEditing ? "checkmark" : "slider.horizontal.3") { store.isEditing.toggle() }
+                Button("Обновить приложения", systemImage: "arrow.clockwise") { store.reloadApps() }
+            } label: {
+                Image(systemName: store.isEditing ? "checkmark" : "slider.horizontal.3")
+                    .font(.system(size: 15, weight: .medium))
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 1))
+            }
+            .menuStyle(.borderlessButton)
+            .help("Настройки и папки")
         }
         .padding(.horizontal, 54).padding(.top, 34).padding(.bottom, 14)
     }
