@@ -6,7 +6,9 @@ struct LauncherView: View {
     @EnvironmentObject private var store: LauncherStore
     @EnvironmentObject private var windowPresentation: WindowPresentationState
     @FocusState private var searchFocused: Bool
+    @FocusState private var folderRenameFocused: Bool
     @State private var renameFolderID: UUID?
+    @State private var inlineRenameFolderID: UUID?
     @State private var folderName = ""
     @State private var isRecordingShortcut = false
 
@@ -131,11 +133,31 @@ struct LauncherView: View {
                 }
             }
             .frame(width: 116, height: 106)
-            Text(folder.name).font(.system(size: 13, weight: .medium)).lineLimit(1).frame(maxWidth: 150)
+            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .onTapGesture { store.openFolder(folder.id) }
+            if inlineRenameFolderID == folder.id {
+                TextField("Название папки", text: $folderName)
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.center)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(maxWidth: 150)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 7))
+                    .focused($folderRenameFocused)
+                    .onSubmit { commitInlineFolderRename() }
+                    .onExitCommand { cancelInlineFolderRename() }
+                    .onAppear { folderRenameFocused = true }
+            } else {
+                Text(folder.name)
+                    .font(.system(size: 13, weight: .medium)).lineLimit(1).frame(maxWidth: 150)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { beginInlineFolderRename(folder) }
+                    .help("Дважды нажмите, чтобы переименовать")
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 150)
         .contentShape(Rectangle())
-        .onTapGesture { store.openFolder(folder.id) }
         .contextMenu {
             Button("Открыть папку") { store.openFolder(folder.id) }
             Button("Переименовать") { folderName = folder.name; renameFolderID = folder.id }
@@ -146,7 +168,7 @@ struct LauncherView: View {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { store.move(app, to: folder.id) }
             return true
         }
-        .help("Дважды нажмите, чтобы открыть папку")
+        .help("Нажмите значок, чтобы открыть · Дважды нажмите название, чтобы переименовать")
     }
 
     private func appTile(_ app: LauncherApp) -> some View {
@@ -238,6 +260,22 @@ struct LauncherView: View {
     private func updateShortcut(keyCode: UInt16, modifiers: UInt32) {
         do { try store.setShortcut(keyCode: keyCode, modifiers: modifiers) }
         catch { store.startupError = error.localizedDescription }
+    }
+
+    private func beginInlineFolderRename(_ folder: LauncherFolder) {
+        folderName = folder.name
+        inlineRenameFolderID = folder.id
+    }
+
+    private func commitInlineFolderRename() {
+        if let id = inlineRenameFolderID { store.renameFolder(id, to: folderName) }
+        inlineRenameFolderID = nil
+        folderRenameFocused = false
+    }
+
+    private func cancelInlineFolderRename() {
+        inlineRenameFolderID = nil
+        folderRenameFocused = false
     }
 
     private func folderEditor(_ id: UUID) -> some View {
