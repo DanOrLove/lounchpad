@@ -1,6 +1,6 @@
 # Lunchpad
 
-Открытый лаунчер для macOS на SwiftUI. Он показывает приложения из `/Applications` на полупрозрачном системном фоне, помогает искать и раскладывать приложения по папкам. Поддерживает глобальную горячую клавишу и запуск при входе в систему.
+Открытый лаунчер для macOS на SwiftUI. Он показывает приложения из `/Applications` на полупрозрачном системном фоне, помогает искать и раскладывать приложения по папкам. В настройках можно выбрать оттенок фонового стекла. Поддерживает глобальную горячую клавишу и запуск при входе в систему.
 
 ## Установить приложение
 
@@ -50,7 +50,7 @@ LUNCHPAD_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./buil
 
 ## English
 
-Lunchpad is an open-source SwiftUI launcher for macOS. It lists apps from `/Applications` over a translucent system background and supports search, folders, a global shortcut, and launch at login.
+Lunchpad is an open-source SwiftUI launcher for macOS. It lists apps from `/Applications` over a translucent system background and supports search, folders, a customizable background tint, a global shortcut, and launch at login.
 
 ### Install
 

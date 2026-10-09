@@ -3,13 +3,16 @@ import SwiftUI
 
 /// A fixed macOS desktop material for the launcher's translucent backdrop.
 struct WindowBackdrop: NSViewRepresentable {
+    var tint: NSColor
+
     func makeNSView(context: Context) -> BackdropHostView {
         let view = BackdropHostView()
+        view.update(tint: tint)
         return view
     }
 
     func updateNSView(_ view: BackdropHostView, context: Context) {
-        view.update()
+        view.update(tint: tint)
     }
 }
 
@@ -45,14 +48,32 @@ final class BackdropHostView: NSView {
             tintView.topAnchor.constraint(equalTo: topAnchor),
             tintView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
-        update()
+        update(tint: NSColor(lunchpadHex: "#20283A") ?? .black)
     }
 
     required init?(coder: NSCoder) { nil }
 
-    func update() {
+    func update(tint: NSColor) {
         materialView.alphaValue = 1
-        let glassTint = NSColor(srgbRed: 0.14, green: 0.19, blue: 0.34, alpha: 0.13)
+        let glassTint = tint.withAlphaComponent(0.13)
         tintView.layer?.backgroundColor = glassTint.cgColor
+    }
+}
+
+extension NSColor {
+    convenience init?(lunchpadHex: String) {
+        let value = lunchpadHex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard value.count == 6, let rgb = UInt32(value, radix: 16) else { return nil }
+        self.init(
+            srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
+            green: CGFloat((rgb >> 8) & 0xFF) / 255,
+            blue: CGFloat(rgb & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+
+    var lunchpadHex: String {
+        guard let color = usingColorSpace(.sRGB) else { return "#20283A" }
+        return String(format: "#%02X%02X%02X", Int(color.redComponent * 255), Int(color.greenComponent * 255), Int(color.blueComponent * 255))
     }
 }

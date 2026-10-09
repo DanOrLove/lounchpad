@@ -11,12 +11,14 @@ struct LauncherView: View {
     @State private var inlineRenameFolderID: UUID?
     @State private var folderName = ""
     @State private var isRecordingShortcut = false
+    @State private var showColorEditor = false
+    @State private var colorHexDraft = "#20283A"
 
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 42)]
 
     var body: some View {
         ZStack {
-            WindowBackdrop().ignoresSafeArea()
+            WindowBackdrop(tint: NSColor(lunchpadHex: store.backgroundHex) ?? .black).ignoresSafeArea()
             VStack(spacing: 0) {
                 header
                 ScrollView {
@@ -69,6 +71,7 @@ struct LauncherView: View {
         .sheet(item: Binding(get: { renameFolderID.map(FolderEditor.init(id:)) }, set: { renameFolderID = $0?.id })) { editor in
             folderEditor(editor.id)
         }
+        .onChange(of: store.backgroundHex) { _, newValue in colorHexDraft = newValue }
     }
 
     private var header: some View {
@@ -210,11 +213,70 @@ struct LauncherView: View {
             Divider().frame(height: 22)
             Toggle("Автозапуск", isOn: Binding(get: { store.startupEnabled }, set: { store.setLaunchAtLogin($0) }))
                 .toggleStyle(.switch).font(.system(size: 12, weight: .medium)).fixedSize()
+            Divider().frame(height: 22)
+            Button {
+                colorHexDraft = store.backgroundHex
+                showColorEditor.toggle()
+            } label: {
+                Label("Цвет фона", systemImage: "paintpalette")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showColorEditor, arrowEdge: .bottom) { colorEditor }
         }
         .padding(.horizontal, 24).padding(.vertical, 14)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().stroke(.primary.opacity(0.16), lineWidth: 1))
         .padding(.horizontal, 34).padding(.bottom, 22)
+    }
+
+    private var colorEditor: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Цвет фона").font(.system(size: 14, weight: .semibold))
+            HStack(spacing: 12) {
+                ColorPicker("Выбрать цвет", selection: Binding(
+                    get: { Color(nsColor: NSColor(lunchpadHex: store.backgroundHex) ?? .black) },
+                    set: { color in
+                        let hex = NSColor(color).lunchpadHex
+                        colorHexDraft = hex
+                        store.backgroundHex = hex
+                    }
+                ), supportsOpacity: false)
+                .labelsHidden()
+                TextField("#20283A", text: $colorHexDraft)
+                    .font(.system(size: 12, design: .monospaced))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .onSubmit { applyColorHexDraft() }
+            }
+            HStack(spacing: 9) {
+                ForEach(["#20283A", "#263C52", "#42344D", "#263F3B", "#493A32", "#17191F"], id: \.self) { hex in
+                    Button {
+                        colorHexDraft = hex
+                        store.backgroundHex = hex
+                    } label: {
+                        Circle().fill(Color(nsColor: NSColor(lunchpadHex: hex) ?? .black))
+                            .frame(width: 22, height: 22)
+                            .overlay(Circle().stroke(.primary.opacity(0.35), lineWidth: 1))
+                            .overlay(Circle().stroke(store.backgroundHex == hex ? .white : .clear, lineWidth: 2).padding(2))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Цвет \(hex)")
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 260)
+    }
+
+    private func applyColorHexDraft() {
+        let normalized = colorHexDraft.hasPrefix("#") ? colorHexDraft : "#" + colorHexDraft
+        guard NSColor(lunchpadHex: normalized) != nil else {
+            colorHexDraft = store.backgroundHex
+            return
+        }
+        colorHexDraft = normalized.uppercased()
+        store.backgroundHex = colorHexDraft
     }
 
     private var hotKeyControl: some View {

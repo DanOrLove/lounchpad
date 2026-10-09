@@ -29,6 +29,9 @@ final class LauncherStore: ObservableObject {
     @Published var shortcutModifiers: UInt32 = UInt32(UserDefaults.standard.integer(forKey: "launcherShortcutModifiers"))
     @Published var startupEnabled = SMAppService.mainApp.status == .enabled || SMAppService.mainApp.status == .requiresApproval
     @Published var startupError: String?
+    @Published var backgroundHex: String {
+        didSet { UserDefaults.standard.set(backgroundHex, forKey: "windowBackgroundHex") }
+    }
 
     private let folderURL: URL
     private static func initialOnboardingStep() -> Int? {
@@ -43,8 +46,10 @@ final class LauncherStore: ObservableObject {
     }
 
     init() {
-        ["windowTransparency", "windowBackgroundHex", "launcherColorTheme", "customButtonHex"]
+        ["windowTransparency", "launcherColorTheme", "customButtonHex"]
             .forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        let savedBackgroundHex = UserDefaults.standard.string(forKey: "windowBackgroundHex") ?? "#20283A"
+        backgroundHex = NSColor(lunchpadHex: savedBackgroundHex) == nil ? "#20283A" : savedBackgroundHex
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Lunchpad", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
