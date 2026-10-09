@@ -22,8 +22,11 @@ final class LauncherStore: ObservableObject {
     @Published private(set) var apps: [LauncherApp] = []
     @Published var folders: [LauncherFolder] = []
     @Published var searchText = ""
-    @Published var transparency: Double = 0.88 {
+    @Published var transparency: Double = 72 {
         didSet { UserDefaults.standard.set(transparency, forKey: "windowTransparency") }
+    }
+    @Published var backgroundHex: String = UserDefaults.standard.string(forKey: "windowBackgroundHex") ?? "#20283A" {
+        didSet { UserDefaults.standard.set(backgroundHex, forKey: "windowBackgroundHex") }
     }
     @Published var selectedFolder: UUID?
     @Published var isEditing = false
@@ -51,7 +54,13 @@ final class LauncherStore: ObservableObject {
             .appendingPathComponent("Lunchpad", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         folderURL = support.appendingPathComponent("folders.json")
-        transparency = UserDefaults.standard.object(forKey: "windowTransparency") as? Double ?? 0.88
+        if let savedTransparency = UserDefaults.standard.object(forKey: "windowTransparency") as? Double {
+            // Earlier builds saved this value as a 0...1 fraction.
+            transparency = savedTransparency <= 1 ? savedTransparency * 100 : min(100, max(0, savedTransparency))
+        } else {
+            transparency = 72
+        }
+        if backgroundHex.count != 7 || !backgroundHex.hasPrefix("#") { backgroundHex = "#20283A" }
         loadFolders()
         reloadApps()
     }
@@ -67,6 +76,13 @@ final class LauncherStore: ObservableObject {
         }
         guard !query.isEmpty else { return candidates }
         return candidates.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    var visibleFolders: [LauncherFolder] {
+        guard selectedFolder == nil else { return [] }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return folders }
+        return folders.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 
     var shortcutTitle: String {
